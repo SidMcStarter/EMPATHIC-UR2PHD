@@ -10,7 +10,6 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 import torchvision.datasets as dsets
 import torchvision.transforms as transforms
-from torch.autograd import Variable
 
 from data_loader_facs import FaceFeatureDataset
 from network_facs import Net
@@ -20,6 +19,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 import operator
 from scipy.spatial import distance
+
+device = torch.device(
+    "mps" if torch.backends.mps.is_available()
+    else "cuda" if torch.cuda.is_available()
+    else "cpu"
+)
+print("Using device:", device)
 
 
 batch_size = 1
@@ -93,13 +99,13 @@ testcase_losses = []
 
 testcase_matches = copy.deepcopy(all_matches)
 print('loading model:',best_model)
-state_dict = torch.load(best_model)
+state_dict = torch.load(best_model, map_location=device)
 net.load_state_dict(state_dict)
 for param in net.parameters():
     net.requires_grad = False
     
 net.eval()
-net.cuda()
+net.to(device)
 
 total = 0
 total_loss = 0
@@ -108,9 +114,9 @@ output_fh = open('evaluation_outputs/'+subject_under_test+'.csv','w')
 
 # Testing the trained model on holdout set, and record the reward class probability for each pickup event.
 for i,  (img_features, labels, _, event_mask, _, _, _) in enumerate(test_loader):
-    img_features = Variable(img_features.float()).cuda()
-    event_mask = Variable(event_mask.float()).cuda()
-    labels = Variable(labels).cuda()
+    img_features = img_features.float().to(device)
+    event_mask = event_mask.float().to(device)
+    labels = labels.to(device)
     outputs, _ = net(img_features.float(), event_mask)
     loss = celoss(outputs, labels.long())
     testcase_losses.append(loss.item())

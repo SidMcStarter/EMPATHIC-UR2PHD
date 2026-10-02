@@ -1,11 +1,11 @@
 import sys
 import copy
+import os
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 import torchvision.datasets as dsets
 import torchvision.transforms as transforms
-from torch.autograd import Variable
 from torch.distributions.normal import Normal
 
 from data_loader_facs import FaceFeatureDataset
@@ -15,6 +15,13 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import torch.nn.functional as F
+
+device = torch.device(
+    "mps" if torch.backends.mps.is_available()
+    else "cuda" if torch.cuda.is_available()
+    else "cpu"
+)
+print("Using device:", device)
 
 
 # Test the Model
@@ -28,12 +35,12 @@ def test_model(epoch, net, num_classes1, dataset, data_loader, regression, batch
     total_loss3 = 0.0
 
     for (img_features, labels, _, event_mask, binary_labels1, binary_labels2, annot_target) in data_loader:
-        img_features = Variable(img_features.float()).cuda()
-        event_mask = Variable(event_mask.float()).cuda()
-        labels = Variable(labels).cuda()
-        binary_labels1 = Variable(binary_labels1).cuda()
-        binary_labels2 = Variable(binary_labels2).cuda()
-        annot_target = Variable(annot_target).cuda()
+        img_features = img_features.float().to(device)
+        event_mask = event_mask.float().to(device)
+        labels = labels.to(device)
+        binary_labels1 = binary_labels1.to(device)
+        binary_labels2 = binary_labels2.to(device)
+        annot_target = annot_target.float().to(device)
 
         # Regression part is used for predicting other RL statistics such as Q-values and advantage.
         # For this paper, we only showed an instantiation using reward as target, so you should not use regression when running our code.
@@ -50,7 +57,7 @@ def test_model(epoch, net, num_classes1, dataset, data_loader, regression, batch
 
             if not fix_dist is None:
                 outputs = np.tile(np.log(fix_dist), labels.shape[0]).reshape(labels.shape[0], -1)
-                outputs = torch.Tensor(outputs).cuda().float()
+                outputs = torch.Tensor(outputs).to(device).float()
             else:
                 outputs, annot_pred = net(img_features.float(), event_mask)                      
                 loss3 = mseLoss(annot_pred.squeeze(), annot_target.float())
@@ -158,15 +165,15 @@ eval_dataset = FaceFeatureDataset(subject_under_test=subject_under_test, target_
 
 # Data Loader (Input Pipeline)
 if regression: 
-    train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, num_workers=4, drop_last=True)
+    train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, num_workers=0, drop_last=True)
 else: 
-    train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, num_workers=4, sampler=train_dataset.sampler, drop_last=True)
+    train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, num_workers=0, sampler=train_dataset.sampler, drop_last=True)
 test_loader  = torch.utils.data.DataLoader(dataset=test_dataset,  batch_size=batch_size)
 eval_loader  = torch.utils.data.DataLoader(dataset=eval_dataset, batch_size=batch_size, shuffle=False)
 
 # Initialize Neural net
 net = Net(input_size=train_dataset.feature_size, embed_size=embed_size, h_sizes=h_sizes, dropout=dropout, num_classes1=num_classes1, num_classes2=num_classes2, apply_event_mask=apply_event_mask, regression=regression, window_size=window_size)
-net.cuda()
+net.to(device)
 
 print(net)
 
@@ -201,12 +208,12 @@ for epoch in range(num_epochs):
     for i, (img_features, labels, _, event_mask, binary_labels1, binary_labels2, annot_targets) in enumerate(train_loader):  
         # Forward + Backward + Optimize
         optimizer.zero_grad()
-        img_features = Variable(img_features.float()).cuda()
-        event_mask = Variable(event_mask.float()).cuda()
-        labels = Variable(labels).cuda()
-        binary_labels1 = Variable(binary_labels1).cuda()
-        binary_labels2 = Variable(binary_labels2).cuda()
-        annot_targets = Variable(annot_targets).cuda()
+        img_features = img_features.float().to(device)
+        event_mask = event_mask.float().to(device)
+        labels = labels.to(device)
+        binary_labels1 = binary_labels1.to(device)
+        binary_labels2 = binary_labels2.to(device)
+        annot_targets = annot_targets.float().to(device)
 
         if regression:           
             outputs_mu, outputs_sigma, outputs_rec = net(img_features.float(), event_mask)
@@ -253,4 +260,5 @@ for epoch in range(num_epochs):
                 print ('Epoch [%d/%d], Step [%d/%d], Loss: %.4f, Classification_Loss: %.4f, Binary_Classification_Loss: %.4f, Aux_loss: %.4f' 
                %(epoch+1, num_epochs, i+1, len(train_dataset)//batch_size, loss.data.item(), loss1.data.item(),  loss2.data.item(), loss3.data.item()))
 
+os.makedirs('MLP_facs_reward_models', exist_ok=True)
 torch.save(best_model_wts, 'MLP_facs_reward_models/'+subject_under_test+'_'+str(np.round(lowest_loss,4))+'.pkl')

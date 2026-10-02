@@ -4,7 +4,6 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 import torchvision.datasets as dsets
 import torchvision.transforms as transforms
-from torch.autograd import Variable
 
 import torch.nn.functional as F
 import pandas as pd
@@ -123,8 +122,8 @@ class Net(nn.Module):
         else:
             facs_in = input_feat.reshape(enc_shape[0],enc_shape[1]*enc_shape[2])
               
-        const_c = Variable(torch.Tensor([0.5]).float())
-        facs_out = self.facs_input(torch.clamp(facs_in,0.0,1.0) - const_c.expand(facs_in.size()).cuda())
+        const_c = torch.full_like(facs_in, 0.5)
+        facs_out = self.facs_input(torch.clamp(facs_in,0.0,1.0) - const_c)
 
         if self.apply_event_mask:
             event_mask = self.event_mask_fc(mask)

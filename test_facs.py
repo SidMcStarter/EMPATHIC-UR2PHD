@@ -19,6 +19,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import operator
 from scipy.spatial import distance
+from scipy.stats import kendalltau
 
 device = torch.device(
     "mps" if torch.backends.mps.is_available()
@@ -110,6 +111,7 @@ net.to(device)
 total = 0
 total_loss = 0
 
+os.makedirs('evaluation_outputs', exist_ok=True)
 output_fh = open('evaluation_outputs/'+subject_under_test+'.csv','w')
 
 # Testing the trained model on holdout set, and record the reward class probability for each pickup event.
@@ -184,9 +186,10 @@ for num_pickups in pivots:
         if i == matching[i]: score += 1
     if score == 1 and (matching[0] == 1 and matching[1] == 0 or matching[1] == 2 and matching[2] == 1):
         score += 1
+    tau = kendalltau((0, 1, 2), matching).statistic
     total_score[score_idx] += score
     score_idx += 1
-    print('[num pred frames ',num_pickups, '] Best guess:', matching, ' Score:', score)
+    print('[num pred frames ',num_pickups, '] Best guess:', matching, ' Score:', score, ' Kendall tau:', tau)
     scores.append(score)
 
 print('Final score,', ','.join([str(score) for score in scores]))

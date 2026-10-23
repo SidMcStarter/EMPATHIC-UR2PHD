@@ -1,5 +1,9 @@
 # Project-specific
 
+.DS_Store
+/2009.13649v3*.pdf
+/MLP_facs_reward_models/*.pkl
+
 **/*.model
 **/*.csv
 **/*.log
